@@ -1,70 +1,89 @@
 pipeline {
-  agent any
+    agent any
 
-  stages {
-    stage('Initial') {
-      steps {
-        sh 'ls -alh'
-        sh 'node --version'
-        sh 'npm --version'
-      }
+    options {
+        // 1. Opciones del Job
+        disableConcurrentBuilds()
+        timestamps()
+        timeout(time: 5, unit: 'MINUTES')
     }
 
-    stage('Install') {
-      steps {
-        sh 'npm install'
-      }
+    environment {
+        // 2. Variables de entorno
+        FORCE_COLOR = '0'
+        NO_COLOR    = 'true'
     }
 
-    stage('Format check') {
-      steps {
-        warnError(message: 'La guía de estilo no se ha respetado') {
-          sh 'npm run format:check'
+    stages {
+        // 3. Auditoría de herramientas
+        stage('Audit tools') {
+            steps {
+                sh 'node --version'
+            }
         }
-        script {
-          if (currentBuild.result == 'UNSTABLE') {
-            currentBuild.description = 'UNSTABLE: Format Check'
-          }
+
+        // 4. Instalación de dependencias
+        stage('Install dependencies') {
+            steps {
+                sh 'npm install'
+            }
         }
-      }
+
+        // 5. Creación de ficheros autogenerados
+        stage('Generate files') {
+            steps {
+                sh 'npm run prisma:generate'
+            }
+        }
+
+        // 6. Chequeo de formato de código
+        stage('Format check') {
+            steps {
+                sh 'npm run format:check'
+            }
+        }
+
+        // 7. Chequeo de calidad de código
+        stage('Code quality') {
+            steps {
+                sh 'npm run lint'
+            }
+        }
+
+        // 8. Chequeo de tipos
+        stage('Type check') {
+            steps {
+                sh 'npm run type-check'
+            }
+        }
+
+        // 9. Ejecución de tests
+        stage('Tests') {
+            steps {
+                sh 'npm run test'
+            }
+        }
+
+        // 10. Construcción y archivado
+        stage('Build') {
+            steps {
+                sh 'npm run build'
+                // Archiva el directorio dist/ activando el fingerprinting
+                archiveArtifacts artifacts: 'dist/**', fingerprint: true
+            }
+        }
     }
 
-    stage('Lint') {
-      steps {
-        sh 'npm run lint'
-      }
+    // 11. Etapas finales (Post-actions)
+    post {
+        success {
+            echo 'Pipeline completed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed. Review logs.'
+        }
+        always {
+            cleanWs()
+        }
     }
-
-    stage('Type check') {
-      steps {
-        sh 'npm run type-check'
-      }
-    }
-
-    stage('Tests') {
-      steps {
-        sh 'npm run test'
-      }
-    }
-  }
-
-  post {
-    always {
-      cleanWs()
-    }
-
-    success {
-      echo 'Pipeline completed successfully'
-    }
-
-    unstable {
-      echo 'Pipeline pass with some errors.'
-    }
-
-    failure {
-      echo 'Pipeline failed. Review logs.'
-    }
-
-
-  }
 }
